@@ -62,26 +62,26 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           python - <<'PY'
-import re, pathlib, os
+            import re, pathlib, os
 
-tag = os.environ["TAG"]
-text = pathlib.Path("CHANGELOG.md").read_text().splitlines()
-pattern = re.compile(rf"^## \\[{re.escape(tag)}\\]")
-collect = False
-lines = []
-for line in text:
-    if pattern.match(line):
-        collect = True
-        continue
-    if collect and line.startswith("## ["):
-        break
-    if collect:
-        lines.append(line)
-notes = "\n".join(lines).strip()
-if not notes:
-    notes = f"Release {tag}"
-pathlib.Path("/tmp/release_notes.txt").write_text(notes)
-PY
+            tag = os.environ["TAG"]
+            text = pathlib.Path("CHANGELOG.md").read_text().splitlines()
+            pattern = re.compile(rf"^## \\[{re.escape(tag)}\\]")
+            collect = False
+            lines = []
+            for line in text:
+                if pattern.match(line):
+                    collect = True
+                    continue
+                if collect and line.startswith("## ["):
+                    break
+                if collect:
+                    lines.append(line)
+            notes = "\n".join(lines).strip()
+            if not notes:
+                notes = f"Release {tag}"
+            pathlib.Path("/tmp/release_notes.txt").write_text(notes)
+          PY
           echo "notes<<EOF" >> "$GITHUB_OUTPUT"
           cat /tmp/release_notes.txt >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
