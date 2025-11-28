@@ -85,7 +85,7 @@ jobs:
           {
             printf 'notes<<EOF\n'
             cat /tmp/release_notes.txt
-            printf 'EOF\n'
+            printf '\nEOF\n'
           } >> "$GITHUB_OUTPUT"
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
