@@ -82,9 +82,11 @@ jobs:
               notes = f"Release {tag}"
           pathlib.Path("/tmp/release_notes.txt").write_text(notes)
           PY
-          echo "notes<<EOF" >> "$GITHUB_OUTPUT"
-          cat /tmp/release_notes.txt >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          {
+            echo "notes<<EOF"
+            cat /tmp/release_notes.txt
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
