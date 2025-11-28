@@ -20,6 +20,7 @@ const axios = require('axios');
 const { Client, Wallet } = require('xrpl');
 const router = express.Router();
 const db = require('../../database');
+const { getXRPLSettings, getIssuerWalletByAddress, getDefaultIssuerWallet } = require('../config/xrpl');
 
 //
 // generic logging
@@ -61,10 +62,20 @@ function authorizeAdmin(req, res, next) {
 
 let xrplClientInstance = null;
 
+function ensureNotMainnet(res) {
+  const { network } = getXRPLSettings();
+  if (network === 'mainnet') {
+    res.status(400).json({ message: 'Faucet funding and sponsorship are disabled on mainnet.' });
+    return false;
+  }
+  return true;
+}
+
 // Function to Get or Create XRPL Client
 function getXRPLClient() {
   if (!xrplClientInstance) {
-    xrplClientInstance = new Client('wss://s.altnet.rippletest.net:51233'); // XRPL Testnet
+    const { endpoint } = getXRPLSettings();
+    xrplClientInstance = new Client(endpoint);
   }
   return xrplClientInstance;
 }
@@ -136,6 +147,7 @@ async function initializeIssuerWallet() {
 // POST /api/testnet/fund-issuer - Fund Issuer Wallet (Admin Only)
 router.post('/fund-issuer', authenticateToken, authorizeAdmin, async (req, res) => {
   try {
+    if (!ensureNotMainnet(res)) return;
     const xrplClient = getXRPLClient();
 
     if (!xrplClient.issuerWallet) {
@@ -486,10 +498,15 @@ router.post('/trustlines/create', authenticateToken, authorizeAdmin, async (req,
  */
 
 router.post('/payments/send', authenticateToken, authorizeAdmin, async (req, res) => {
-  const { employeeWallet, amount } = req.body;
+  const { employeeWallet, amount, issuerAddress } = req.body;
 
   if (!employeeWallet || !amount) {
     return res.status(400).json({ message: 'Employee wallet address and amount are required.' });
+  }
+
+  const maxPerTx = parseFloat(process.env.MAX_PAYMENT_PER_TX || '0');
+  if (maxPerTx > 0 && parseFloat(amount) > maxPerTx) {
+    return res.status(400).json({ message: `Requested amount exceeds max per transaction limit (${maxPerTx}).` });
   }
 
   try {
@@ -499,13 +516,16 @@ router.post('/payments/send', authenticateToken, authorizeAdmin, async (req, res
       await xrplClient.connect();
     }
 
-    if (!xrplClient.issuerWallet) {
-      const issuerSeed = process.env.ISSUER_WALLET_SEED;
-      if (!issuerSeed) {
-        return res.status(500).json({ message: 'Issuer wallet seed not set in environment variables.' });
-      }
-      xrplClient.issuerWallet = Wallet.fromSeed(issuerSeed);
+    const selectedIssuer = issuerAddress
+      ? getIssuerWalletByAddress(issuerAddress)
+      : getIssuerWalletByAddress(xrplClient.issuerAddress) || getDefaultIssuerWallet();
+
+    if (!selectedIssuer) {
+      return res.status(500).json({ message: 'No issuer wallet available. Configure ISSUER_WALLET_SEED or ISSUER_WALLET_SEEDS.' });
     }
+
+    xrplClient.issuerWallet = Wallet.fromSeed(selectedIssuer.seed);
+    xrplClient.issuerAddress = xrplClient.issuerWallet.address;
 
     const paymentTx = {
       TransactionType: 'Payment',
@@ -653,6 +673,7 @@ router.post('/fund-wallet', authenticateToken, authorizeAdmin, async (req, res) 
   }
 
   try {
+    if (!ensureNotMainnet(res)) return;
     console.log(`Initiating funding for wallet: ${walletAddress}`);
     const faucetResponse = await axios.post('https://faucet.altnet.rippletest.net/accounts', {
       destination: walletAddress,
@@ -670,6 +691,63 @@ router.post('/fund-wallet', authenticateToken, authorizeAdmin, async (req, res) 
   } catch (error) {
     console.error('Error funding wallet:', error.message);
     res.status(500).json({ message: 'Failed to fund wallet.', error: error.message });
+  }
+});
+
+/**
+ * POST /api/testnet/wallets/sponsor
+ * Fund a wallet (dev/test only) and create a trustline to the issuer.
+ */
+router.post('/wallets/sponsor', authenticateToken, authorizeAdmin, async (req, res) => {
+  const { walletAddress, walletSeed, trustLimit = '1000000', issuerAddress } = req.body;
+
+  if (!walletAddress || !walletSeed) {
+    return res.status(400).json({ message: 'walletAddress and walletSeed are required for sponsorship.' });
+  }
+
+  try {
+    if (!ensureNotMainnet(res)) return;
+
+    const xrplClient = getXRPLClient();
+    if (!xrplClient.isConnected()) {
+      await xrplClient.connect();
+    }
+
+    const selectedIssuer = issuerAddress
+      ? getIssuerWalletByAddress(issuerAddress)
+      : getDefaultIssuerWallet();
+
+    if (!selectedIssuer) {
+      return res.status(500).json({ message: 'Issuer wallet not configured.' });
+    }
+
+    // Fund the wallet via faucet
+    await axios.post('https://faucet.altnet.rippletest.net/accounts', { destination: walletAddress });
+
+    // Create trustline
+    const employeeWallet = Wallet.fromSeed(walletSeed);
+    const trustSetTx = {
+      TransactionType: 'TrustSet',
+      Account: employeeWallet.classicAddress,
+      LimitAmount: {
+        currency: 'USD',
+        issuer: selectedIssuer.address,
+        value: trustLimit,
+      },
+    };
+
+    const prepared = await xrplClient.autofill(trustSetTx);
+    const signed = employeeWallet.sign(prepared);
+    const result = await xrplClient.submitAndWait(signed.tx_blob);
+
+    if (result.result.meta.TransactionResult !== 'tesSUCCESS') {
+      throw new Error(`Trustline failed: ${result.result.meta.TransactionResult}`);
+    }
+
+    res.status(200).json({ message: 'Wallet funded and trustline created.' });
+  } catch (error) {
+    console.error('Error sponsoring wallet:', error.message);
+    res.status(500).json({ message: 'Failed to sponsor wallet.', error: error.message });
   }
 });
 

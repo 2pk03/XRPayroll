@@ -30,6 +30,7 @@ const employerRoutes = require('./src/routes/employerRoutes');
 const employeeRoutes = require('./src/routes/employeeRoutes');
 const testnetRoutes = require('./src/routes/testnetRoutes'); // New Testnet routes
 const { getIssuerWalletAndJwtSecret } = require('./issuerWallet');
+const { getXRPLSettings, parseIssuerWallets, getDefaultIssuerWallet } = require('./src/config/xrpl');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -63,6 +64,8 @@ let jwtSecret;
 
 // Initialize XRPL Client in app.locals
 app.locals.xrplClient = null;
+app.locals.xrplNetwork = null;
+app.locals.issuerWallets = [];
 
 // Routes
 app.use('/api/auth', authRoutes); 
@@ -76,6 +79,14 @@ app.use('/api/testnet', testnetRoutes); // Mount the new Testnet routes
 // Root Endpoint
 app.get('/', (req, res) => {
   res.send('XRPayroll Backend is running.');
+});
+
+// Config Endpoint (safe subset)
+app.get('/api/config', (req, res) => {
+  res.json({
+    network: app.locals.xrplNetwork || 'testnet',
+    issuerAddresses: (app.locals.issuerWallets || []).map((w) => w.address),
+  });
 });
 
 // Centralized Error Handling Middleware
@@ -94,6 +105,13 @@ async function startServer() {
     // Make jwtSecret and issuerWallet available to other modules if needed
     app.set('jwtSecret', jwtSecret);
     app.set('issuerWallet', issuerWallet);
+    app.locals.issuerWallets = parseIssuerWallets();
+    const xrplSettings = getXRPLSettings();
+    app.locals.xrplNetwork = xrplSettings.network;
+    app.set('xrplEndpoint', xrplSettings.endpoint);
+    if (!app.locals.issuerWallets.length && issuerWallet) {
+      app.locals.issuerWallets = [{ seed: issuerWallet.seed, address: issuerWallet.classicAddress }];
+    }
 
     // Start Server
     app.listen(PORT, () => {

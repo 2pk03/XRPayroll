@@ -19,6 +19,7 @@ const { getIssuerWalletAndJwtSecret } = require('../../issuerWallet');
 const db = require('../../database');
 const xrpl = require('xrpl');
 const { authenticateToken, authorizeRole } = require('../controllers/authMiddleware');
+const { getXRPLSettings } = require('../config/xrpl');
 const router = express.Router();
 
 /**
@@ -31,6 +32,11 @@ router.post('/send-rls', authenticateToken, authorizeRole('admin'), async (req, 
 
   if (!employee_id || !amount) {
     return res.status(400).json({ message: 'Missing employee_id or amount.' });
+  }
+
+  const maxPerTx = parseFloat(process.env.MAX_PAYMENT_PER_TX || '0');
+  if (maxPerTx > 0 && parseFloat(amount) > maxPerTx) {
+    return res.status(400).json({ message: `Requested amount exceeds max per transaction limit (${maxPerTx}).` });
   }
 
   try {
@@ -54,7 +60,8 @@ router.post('/send-rls', authenticateToken, authorizeRole('admin'), async (req, 
       }
 
       // Initialize XRPL client
-      const xrplClient = new xrpl.Client('wss://s.altnet.rippletest.net:51233');
+      const { endpoint } = getXRPLSettings();
+      const xrplClient = new xrpl.Client(endpoint);
       await xrplClient.connect();
 
       // Prepare payment transaction
