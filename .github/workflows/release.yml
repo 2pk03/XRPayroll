@@ -80,7 +80,7 @@ jobs:
             if not notes:
                 notes = f"Release {tag}"
             pathlib.Path("/tmp/release_notes.txt").write_text(notes)
-PY
+          PY
           echo "notes<<EOF" >> "$GITHUB_OUTPUT"
           cat /tmp/release_notes.txt >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
