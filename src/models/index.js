@@ -38,8 +38,8 @@ const Transaction = require('./Transaction');
 
 // Establish associations if necessary
 // For example, if you want to link Transactions to Employees
-Employee.hasMany(Transaction, { foreignKey: 'employee_id', sourceKey: 'employee_id' });
-Transaction.belongsTo(Employee, { foreignKey: 'employee_id', targetKey: 'employee_id' });
+Employee.hasMany(Transaction, { foreignKey: 'employee_id', sourceKey: 'id' });
+Transaction.belongsTo(Employee, { foreignKey: 'employee_id', targetKey: 'id' });
 
 // Sync all models
 sequelize.sync()

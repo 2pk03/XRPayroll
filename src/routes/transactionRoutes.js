@@ -35,7 +35,7 @@ router.post('/send-rls', authenticateToken, authorizeRole('admin'), async (req, 
 
   try {
     // Fetch employee details
-    db.get('SELECT * FROM employees WHERE employee_id = ?', [employee_id], async (err, employee) => {
+    db.get('SELECT * FROM employees WHERE employee_id = ? OR id = ?', [employee_id, employee_id], async (err, employee) => {
       if (err) {
         console.error('Database error:', err.message);
         return res.status(500).json({ message: 'Database error.' });
@@ -82,7 +82,7 @@ router.post('/send-rls', authenticateToken, authorizeRole('admin'), async (req, 
             INSERT INTO transactions (employee_id, amount, wallet_address, status, tx_id)
             VALUES (?, ?, ?, ?, ?)
           `,
-            [employee_id, amount, employee.wallet_address, 'Completed', result.result.tx_json.hash],
+            [employee.id, amount, employee.wallet_address, 'Completed', result.result.tx_json.hash],
             function (err) {
               if (err) {
                 console.error('Error logging transaction:', err.message);
@@ -120,14 +120,15 @@ router.get('/transactions', authenticateToken, authorizeRole('admin'), (req, res
     SELECT 
       t.id,
       t.employee_id,
-      e.name AS employee_name,
+      COALESCE(e.name, u.username) AS employee_name,
       t.amount,
       t.wallet_address,
       t.date,
       t.status,
       t.tx_id
     FROM transactions t
-    INNER JOIN employees e ON t.employee_id = e.employee_id
+    INNER JOIN employees e ON t.employee_id = e.id
+    LEFT JOIN users u ON e.userID = u.id
     ORDER BY t.date DESC
   `;
 

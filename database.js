@@ -18,8 +18,10 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const bcrypt = require('bcrypt');
 
+const DB_PATH = process.env.DB_PATH || path.resolve(__dirname, 'XRPayroll.db');
+
 // Initialize SQLite database
-const db = new sqlite3.Database(path.resolve(__dirname, 'XRPayroll.db'), (err) => {
+const db = new sqlite3.Database(DB_PATH, (err) => {
   if (err) {
     console.error('Error opening database:', err.message);
     process.exit(1);
@@ -70,10 +72,12 @@ db.serialize(() => {
   db.run(`
     CREATE TABLE IF NOT EXISTS employees (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      userID INTEGER UNIQUE NOT NULL,
-      employerID INTEGER NOT NULL,
-      payrollAmount REAL NOT NULL,
-      wallet_address TEXT,
+      userID INTEGER UNIQUE,
+      employerID INTEGER,
+      employee_id TEXT UNIQUE,
+      name TEXT,
+      salary REAL,
+      wallet_address TEXT UNIQUE,
       wallet_seed TEXT,
       FOREIGN KEY (userID) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (employerID) REFERENCES employers(id) ON DELETE CASCADE
@@ -130,6 +134,34 @@ db.serialize(() => {
       console.log('Index on transactions.tx_id is ready.');
     }
   });
+
+  // Backfill missing columns for existing databases (idempotent)
+  const ensureColumns = (table, columns) => {
+    db.all(`PRAGMA table_info(${table});`, (err, rows) => {
+      if (err) {
+        console.error(`Failed to inspect ${table} schema:`, err.message);
+        return;
+      }
+      const existing = rows.map(r => r.name);
+      columns.forEach(({ name, ddl }) => {
+        if (!existing.includes(name)) {
+          db.run(`ALTER TABLE ${table} ADD COLUMN ${ddl};`, (alterErr) => {
+            if (alterErr) {
+              console.error(`Failed to add column ${name} to ${table}:`, alterErr.message);
+            } else {
+              console.log(`Added column ${name} to ${table}.`);
+            }
+          });
+        }
+      });
+    });
+  };
+
+  ensureColumns('employees', [
+    { name: 'employee_id', ddl: 'employee_id TEXT UNIQUE' },
+    { name: 'name', ddl: 'name TEXT' },
+    { name: 'salary', ddl: 'salary REAL' },
+  ]);
 
   // Insert default employer
   db.get('SELECT * FROM employers WHERE name = ?', ['Default Employer'], (err, row) => {

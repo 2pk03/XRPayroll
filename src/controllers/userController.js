@@ -103,6 +103,13 @@ const loginUser = async (req, res) => {
     // Generate JWT token
     const token = generateToken(user);
 
+    // Attach HTTP-only cookie then send a single response with token + user details
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
     res.status(200).json({
       message: 'Login successful.',
       token,
@@ -112,14 +119,6 @@ const loginUser = async (req, res) => {
         role: user.role,
       },
     });
-
-    // After signing the token
-res.cookie('token', token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-  });
-  res.status(200).json({ message: 'Login successful.', user: payload });
   
   } catch (error) {
     console.error('Error logging in user:', error);

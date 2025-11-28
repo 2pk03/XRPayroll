@@ -18,23 +18,36 @@ const { DataTypes } = require('sequelize');
 const sequelize = require('./index');
 
 const Employee = sequelize.define('Employee', {
-  name: {
-    type: DataTypes.STRING,
-    allowNull: false,
+  userID: {
+    type: DataTypes.INTEGER,
+    unique: true,
+    allowNull: true,
+  },
+  employerID: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
   },
   employee_id: {
     type: DataTypes.STRING,
     unique: true,
-    allowNull: false,
+    allowNull: true,
+  },
+  name: {
+    type: DataTypes.STRING,
+    allowNull: true,
   },
   salary: { // RLUSD amount
     type: DataTypes.FLOAT,
-    allowNull: false,
+    allowNull: true,
   },
   wallet_address: {
     type: DataTypes.STRING,
     unique: true,
-    allowNull: false,
+    allowNull: true,
+  },
+  wallet_seed: {
+    type: DataTypes.STRING,
+    allowNull: true,
   },
 }, {
   timestamps: true,

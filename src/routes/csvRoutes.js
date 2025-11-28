@@ -85,7 +85,7 @@ router.post('/import-csv', authenticateToken, authorizeRole('admin'), upload.sin
             }
 
             // Insert into employees table
-            await new Promise((resolve, reject) => {
+            const employeeResult = await new Promise((resolve, reject) => {
               insertEmployeeStmt.run(
                 emp.name.trim(),
                 emp.employee_id.trim(),
@@ -106,7 +106,7 @@ router.post('/import-csv', authenticateToken, authorizeRole('admin'), upload.sin
             // Log transaction: Imported via CSV
             await new Promise((resolve, reject) => {
               insertTransactionStmt.run(
-                emp.employee_id.trim(),
+                employeeResult.lastID,
                 0, // amount for import; adjust if needed
                 emp.wallet_address.trim(),
                 'Imported via CSV',

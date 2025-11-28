@@ -37,7 +37,11 @@ const authenticate = (req, res, next) => {
     return res.status(401).json({ message: 'No token provided.' });
   }
 
-  const jwtSecret = process.env.JWT_SECRET || 'your_jwt_secret'; // Ensure to set this in your environment variables
+  const jwtSecret = req.app.get('jwtSecret') || process.env.JWT_SECRET;
+  if (!jwtSecret) {
+    console.error('JWT_SECRET is not configured.');
+    return res.status(500).json({ message: 'Internal server error.' });
+  }
 
   jwt.verify(token, jwtSecret, (err, decoded) => {
     if (err) {

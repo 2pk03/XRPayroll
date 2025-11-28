@@ -39,10 +39,9 @@ const authenticate = (req, res, next) => {
     return res.status(401).json({ message: 'No token provided.' });
   }
 
-  const jwtSecret = process.env.JWT_SECRET; // Accessing JWT_SECRET from .env
-
+  const jwtSecret = req.app.get('jwtSecret') || process.env.JWT_SECRET;
   if (!jwtSecret) {
-    console.error('JWT_SECRET is not defined in .env');
+    console.error('JWT secret is not configured.');
     return res.status(500).json({ message: 'Internal server error.' });
   }
 
@@ -105,7 +104,7 @@ router.get('/', authenticate, authorizeAdmin, (req, res) => {
       users.username, 
       users.role, 
       employers.name AS employerName, 
-      employees.payrollAmount
+      employees.salary AS payrollAmount
     FROM users
     LEFT JOIN employees ON users.id = employees.userID
     LEFT JOIN employers ON employees.employerID = employers.id
@@ -142,7 +141,7 @@ router.get('/:id', authenticate, (req, res) => {
       users.username, 
       users.role, 
       employers.name AS employerName, 
-      employees.payrollAmount
+      employees.salary AS payrollAmount
     FROM users
     LEFT JOIN employees ON users.id = employees.userID
     LEFT JOIN employers ON employees.employerID = employers.id
@@ -241,8 +240,8 @@ router.post(
             if (role === 'employee') {
               // Insert into employees table
               db.run(
-                'INSERT INTO employees (userID, employerID, payrollAmount) VALUES (?, ?, ?)',
-                [newUserId, employerID, payrollAmount],
+                'INSERT INTO employees (userID, employerID, salary, employee_id, name) VALUES (?, ?, ?, ?, ?)',
+                [newUserId, employerID, payrollAmount, `EMP-${newUserId}`, username],
                 function (err) {
                   if (err) {
                     console.error('Database error inserting employee:', err.message);
@@ -418,8 +417,8 @@ router.put(
     async function handleEmployeeData() {
       // Determine if role has changed to/from 'employee'
       const newRole = req.body.role || req.user.role; // Updated role
-      const isEmployee = newRole === 'employee';
-      const isAdmin = req.user.role === 'admin';
+          const isEmployee = newRole === 'employee';
+          const isAdmin = req.user.role === 'admin';
 
       if (isEmployee) {
         if (!isAdmin) {
@@ -438,27 +437,27 @@ router.put(
         }
 
         // Check if employee record exists
-        db.get('SELECT * FROM employees WHERE userID = ?', [userId], (err, employee) => {
-          if (err) {
-            console.error('Database error fetching employee:', err.message);
-            // Rollback transaction
-            db.run('ROLLBACK;', (rollbackErr) => {
-              if (rollbackErr) {
+          db.get('SELECT * FROM employees WHERE userID = ?', [userId], (err, employee) => {
+            if (err) {
+              console.error('Database error fetching employee:', err.message);
+              // Rollback transaction
+              db.run('ROLLBACK;', (rollbackErr) => {
+                if (rollbackErr) {
                 console.error('Failed to rollback transaction:', rollbackErr.message);
               }
               return res.status(500).json({ message: 'Database error.' });
             });
           }
 
-          if (employee) {
-            if (isAdmin) {
-              // Update existing employee record
-              const updateEmpQuery = 'UPDATE employees SET employerID = ?, payrollAmount = ? WHERE userID = ?';
-              const updateEmpParams = [
-                employerID !== undefined ? employerID : employee.employerID,
-                payrollAmount !== undefined ? payrollAmount : employee.payrollAmount,
-                userId,
-              ];
+              if (employee) {
+                if (isAdmin) {
+                  // Update existing employee record
+                  const updateEmpQuery = 'UPDATE employees SET employerID = ?, salary = ? WHERE userID = ?';
+                  const updateEmpParams = [
+                    employerID !== undefined ? employerID : employee.employerID,
+                    payrollAmount !== undefined ? payrollAmount : employee.salary,
+                    userId,
+                  ];
 
               db.run(updateEmpQuery, updateEmpParams, function (err) {
                 if (err) {
@@ -495,22 +494,22 @@ router.put(
               });
             }
           } else {
-            if (isAdmin) {
-              // Create a new employee record
-              if (!employerID || payrollAmount === undefined) {
-                console.warn('Missing employerID or payrollAmount for new employee');
-                // Rollback transaction
-                db.run('ROLLBACK;', (rollbackErr) => {
-                  if (rollbackErr) {
-                    console.error('Failed to rollback transaction:', rollbackErr.message);
+              if (isAdmin) {
+                // Create a new employee record
+                if (!employerID || payrollAmount === undefined) {
+                  console.warn('Missing employerID or payrollAmount for new employee');
+                  // Rollback transaction
+                  db.run('ROLLBACK;', (rollbackErr) => {
+                    if (rollbackErr) {
+                      console.error('Failed to rollback transaction:', rollbackErr.message);
                   }
                   return res.status(400).json({ message: 'employerID and payrollAmount are required for employees.' });
                 });
               }
 
-              db.run(
-                'INSERT INTO employees (userID, employerID, payrollAmount) VALUES (?, ?, ?)',
-                [userId, employerID, payrollAmount],
+                db.run(
+                  'INSERT INTO employees (userID, employerID, salary, employee_id, name) VALUES (?, ?, ?, ?, ?)',
+                  [userId, employerID, payrollAmount, `EMP-${userId}`, req.body.username || user.username],
                 function (err) {
                   if (err) {
                     console.error('Database error inserting employee:', err.message);

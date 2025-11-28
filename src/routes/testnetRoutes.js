@@ -686,19 +686,9 @@ router.post('/employees/get-wallet-seed', authenticateToken, authorizeAdmin, asy
     return res.status(400).json({ message: 'Employee ID is required.' });
   }
 
-  const query = `SELECT wallet_seed FROM employees WHERE id = ?`;
-
-  db.get(query, [employeeID], (err, row) => {
-    if (err) {
-      console.error('Error fetching wallet seed:', err.message);
-      return res.status(500).json({ message: 'Database error.', error: err.message });
-    }
-
-    if (!row || !row.wallet_seed) {
-      return res.status(404).json({ message: 'Wallet seed not found for the employee.' });
-    }
-
-    res.status(200).json({ walletSeed: row.wallet_seed });
+  // For security, do not return seeds over the API. Encourage regulated key handling instead.
+  return res.status(410).json({
+    message: 'Retrieving wallet seeds via API is disabled. Use a secure key management workflow.',
   });
 });
 

@@ -27,7 +27,13 @@ function authenticateToken(req, res, next) {
   
   if (!token) return res.status(401).json({ message: 'No token provided. Unauthorized.' }); // Unauthorized
 
-  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+  const secret = req.app?.get('jwtSecret') || process.env.JWT_SECRET;
+  if (!secret) {
+    console.error('JWT secret is not configured.');
+    return res.status(500).json({ message: 'Server configuration error.' });
+  }
+
+  jwt.verify(token, secret, (err, user) => {
     if (err) {
       console.error('JWT verification failed:', err.message);
       return res.status(403).json({ message: 'Invalid token. Forbidden.' }); // Forbidden
@@ -51,4 +57,3 @@ function authorizeRole(role) {
 }
 
 module.exports = { authenticateToken, authorizeRole };
-

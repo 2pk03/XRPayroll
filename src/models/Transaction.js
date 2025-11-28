@@ -19,7 +19,7 @@ const sequelize = require('./index');
 
 const Transaction = sequelize.define('Transaction', {
   employee_id: {
-    type: DataTypes.STRING,
+    type: DataTypes.INTEGER,
     allowNull: false,
   },
   amount: { // RLUSD amount
@@ -32,7 +32,7 @@ const Transaction = sequelize.define('Transaction', {
   },
   tx_id: { // Transaction ID from XRPL
     type: DataTypes.STRING,
-    allowNull: false,
+    allowNull: true,
   },
   status: { // e.g., 'Success', 'Failed: tesFAILED'
     type: DataTypes.STRING,
