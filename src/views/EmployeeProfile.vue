@@ -16,31 +16,12 @@
     <div class="employee-profile">
       <h2>My Profile</h2>
       
-      <form @submit.prevent="updateProfile">
-        <div class="form-group">
-          <label for="username">Username:</label>
-          <input type="text" id="username" v-model="profile.username" disabled />
-        </div>
-        
-        <div class="form-group">
-          <label for="email">Email:</label>
-          <input type="email" id="email" v-model="profile.email" required />
-        </div>
-        
-        <div class="form-group">
-          <label for="password">New Password:</label>
-          <input type="password" id="password" v-model="profile.password" placeholder="Leave blank to keep current password" />
-        </div>
-        
-        <button type="submit" :disabled="loading">
-          {{ loading ? 'Updating...' : 'Update Profile' }}
-        </button>
-      </form>
-      
-      <div v-if="successMessage" class="success-message">
-        {{ successMessage }}
+      <div class="profile-card">
+        <p><strong>Username:</strong> {{ profile.username }}</p>
+        <p><strong>Role:</strong> {{ profile.role }}</p>
       </div>
-      
+
+      <p class="hint">To update your wallet or password, use Account Settings in the header menu.</p>
       <div v-if="errorMessage" class="error-message">
         {{ errorMessage }}
       </div>
@@ -50,17 +31,15 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import axios from 'axios';
-import { jwtDecode } from 'jwt-decode';
+import jwtDecode from 'jwt-decode';
 import { useRouter } from 'vue-router';
 
 // Reactive variables
 const profile = ref({
   username: '',
-  email: '',
-  password: ''
+  role: '',
+  wallet_address: ''
 });
-const loading = ref(false);
-const successMessage = ref('');
 const errorMessage = ref('');
 
 const router = useRouter();
@@ -76,51 +55,18 @@ async function fetchProfile() {
   try {
     const decoded = jwtDecode(token);
     profile.value.username = decoded.username;
+    profile.value.role = decoded.role;
     
-    const response = await axios.get('/api/users/profile', {
+    const response = await axios.get('/api/users/me', {
       headers: { Authorization: `Bearer ${token}` }
     });
     
-    profile.value.email = response.data.email;
+    if (response.data.user) {
+      profile.value.wallet_address = response.data.user.wallet_address || '';
+    }
   } catch (error) {
     console.error('Error fetching profile:', error);
     errorMessage.value = 'Failed to load profile. Please try again.';
-  }
-}
-
-// Function to update user profile
-async function updateProfile() {
-  loading.value = true;
-  successMessage.value = '';
-  errorMessage.value = '';
-  
-  const token = localStorage.getItem('token');
-  if (!token) {
-    router.push({ name: 'Login' });
-    return;
-  }
-  
-  // Prepare payload
-  const payload = {
-    email: profile.value.email
-  };
-  
-  if (profile.value.password) {
-    payload.password = profile.value.password;
-  }
-  
-  try {
-    await axios.put('/api/users/profile', payload, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    
-    successMessage.value = 'Profile updated successfully!';
-    profile.value.password = ''; // Clear password field
-  } catch (error) {
-    console.error('Error updating profile:', error);
-    errorMessage.value = error.response?.data?.message || 'Failed to update profile.';
-  } finally {
-    loading.value = false;
   }
 }
 
@@ -180,6 +126,19 @@ button:disabled {
 .error-message {
   margin-top: 20px;
   color: #dc3545;
+  text-align: center;
+}
+
+.profile-card {
+  border: 1px solid #ddd;
+  padding: 12px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+.hint {
+  color: #666;
+  margin-top: 10px;
   text-align: center;
 }
 </style>

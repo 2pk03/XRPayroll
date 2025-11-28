@@ -122,6 +122,7 @@ router.post('/send-rls', authenticateToken, authorizeRole('admin'), async (req, 
  */
 router.get('/transactions', authenticateToken, authorizeRole('admin'), (req, res) => {
   console.log(`Admin ${req.user.username} requested all transactions.`);
+  res.set('Cache-Control', 'no-store');
 
   const query = `
     SELECT 
@@ -130,7 +131,7 @@ router.get('/transactions', authenticateToken, authorizeRole('admin'), (req, res
       COALESCE(e.name, u.username) AS employee_name,
       t.amount,
       t.wallet_address,
-      t.date,
+      COALESCE(strftime('%Y-%m-%dT%H:%M:%SZ', t.date), t.date) AS date,
       t.status,
       t.tx_id
     FROM transactions t
@@ -142,6 +143,42 @@ router.get('/transactions', authenticateToken, authorizeRole('admin'), (req, res
   db.all(query, [], (err, rows) => {
     if (err) {
       console.error('Database error fetching transactions:', err.message);
+      return res.status(500).json({ message: 'Database error.' });
+    }
+
+    res.status(200).json({ transactions: rows });
+  });
+});
+
+/**
+ * @route GET /api/transactions/me
+ * @desc Retrieve transactions for the authenticated employee
+ * @access Protected (Employee)
+ */
+router.get('/me', authenticateToken, authorizeRole('employee'), (req, res) => {
+  console.log(`Employee ${req.user.username} requested own transactions.`);
+  res.set('Cache-Control', 'no-store');
+
+  const query = `
+    SELECT 
+      t.id,
+      t.employee_id,
+      e.name AS employee_name,
+      t.amount,
+      t.wallet_address,
+      COALESCE(strftime('%Y-%m-%dT%H:%M:%SZ', t.date), t.date) AS date,
+      t.status,
+      t.tx_id
+    FROM transactions t
+    INNER JOIN employees e ON t.employee_id = e.id
+    INNER JOIN users u ON e.userID = u.id
+    WHERE u.id = ?
+    ORDER BY t.date DESC
+  `;
+
+  db.all(query, [req.user.id], (err, rows) => {
+    if (err) {
+      console.error('Database error fetching employee transactions:', err.message);
       return res.status(500).json({ message: 'Database error.' });
     }
 

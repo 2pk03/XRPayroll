@@ -22,6 +22,7 @@ const { body, validationResult } = require('express-validator');
 const db = require('../../database'); 
 const { loginUser } = require('../controllers/userController');
 const { loginLimiter } = require('../middleware/rateLimiter');
+const { isValidClassicAddress } = require('xrpl');
 
 // Middleware to authenticate JWT tokens
 const authenticate = (req, res, next) => {
@@ -65,6 +66,129 @@ const authorizeAdmin = (req, res, next) => {
   next();
 };
 
+// Get current user profile
+router.get('/me', authenticate, (req, res) => {
+  const userId = req.user.id;
+
+  const query = `
+    SELECT 
+      users.id, 
+      users.username, 
+      users.role, 
+      employees.wallet_address
+    FROM users
+    LEFT JOIN employees ON users.id = employees.userID
+    WHERE users.id = ?
+  `;
+
+  db.get(query, [userId], (err, user) => {
+    if (err) {
+      console.error(`Database error fetching user ID ${userId}:`, err.message);
+      return res.status(500).json({ message: 'Database error.' });
+    }
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    res.status(200).json({ user });
+  });
+});
+
+// Update current user's password
+router.post(
+  '/me/password',
+  authenticate,
+  [
+    body('currentPassword').isString().isLength({ min: 6 }).withMessage('Current password required.'),
+    body('newPassword').isString().isLength({ min: 6 }).withMessage('New password must be at least 6 characters.'),
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const userId = req.user.id;
+    const { currentPassword, newPassword } = req.body;
+
+    db.get('SELECT * FROM users WHERE id = ?', [userId], async (err, user) => {
+      if (err) {
+        console.error('Database error fetching user:', err.message);
+        return res.status(500).json({ message: 'Database error.' });
+      }
+      if (!user) {
+        return res.status(404).json({ message: 'User not found.' });
+      }
+
+      const match = await bcrypt.compare(currentPassword, user.password);
+      if (!match) {
+        return res.status(400).json({ message: 'Current password is incorrect.' });
+      }
+
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      db.run('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, userId], function (updateErr) {
+        if (updateErr) {
+          console.error('Database error updating password:', updateErr.message);
+          return res.status(500).json({ message: 'Database error.' });
+        }
+        res.status(200).json({ message: 'Password updated successfully.' });
+      });
+    });
+  }
+);
+
+// Update current employee wallet address
+router.put(
+  '/me/wallet',
+  authenticate,
+  [
+    body('wallet_address')
+      .isString()
+      .isLength({ min: 25 })
+      .withMessage('Wallet address must be valid.'),
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    if (req.user.role !== 'employee') {
+      return res.status(403).json({ message: 'Only employees can update wallet address.' });
+    }
+
+    const userId = req.user.id;
+    const { wallet_address } = req.body;
+
+    if (!isValidClassicAddress(wallet_address)) {
+      return res.status(400).json({ message: 'Wallet address must be a valid XRPL classic address.' });
+    }
+
+    // Ensure wallet is not already taken
+    db.get('SELECT id FROM employees WHERE wallet_address = ? AND userID != ?', [wallet_address, userId], (err, row) => {
+      if (err) {
+        console.error('Database error checking wallet:', err.message);
+        return res.status(500).json({ message: 'Database error.' });
+      }
+      if (row) {
+        return res.status(409).json({ message: 'Wallet address already in use.' });
+      }
+
+      db.run('UPDATE employees SET wallet_address = ? WHERE userID = ?', [wallet_address, userId], function (updErr) {
+        if (updErr) {
+          console.error('Database error updating wallet:', updErr.message);
+          return res.status(500).json({ message: 'Database error.' });
+        }
+        if (this.changes === 0) {
+          return res.status(404).json({ message: 'Employee record not found for user.' });
+        }
+        res.status(200).json({ message: 'Wallet address updated.' });
+      });
+    });
+  }
+);
+
 /**
  * @route POST /api/users/login
  * @desc Authenticate user and return JWT token
@@ -104,7 +228,8 @@ router.get('/', authenticate, authorizeAdmin, (req, res) => {
       users.username, 
       users.role, 
       employers.name AS employerName, 
-      employees.salary AS payrollAmount
+      employees.salary AS payrollAmount,
+      employees.employerID AS employerID
     FROM users
     LEFT JOIN employees ON users.id = employees.userID
     LEFT JOIN employers ON employees.employerID = employers.id
@@ -141,7 +266,8 @@ router.get('/:id', authenticate, (req, res) => {
       users.username, 
       users.role, 
       employers.name AS employerName, 
-      employees.salary AS payrollAmount
+      employees.salary AS payrollAmount,
+      employees.employerID AS employerID
     FROM users
     LEFT JOIN employees ON users.id = employees.userID
     LEFT JOIN employers ON employees.employerID = employers.id
@@ -240,8 +366,8 @@ router.post(
             if (role === 'employee') {
               // Insert into employees table
               db.run(
-                'INSERT INTO employees (userID, employerID, salary, employee_id, name) VALUES (?, ?, ?, ?, ?)',
-                [newUserId, employerID, payrollAmount, `EMP-${newUserId}`, username],
+                'INSERT INTO employees (userID, employerID, salary, salary_currency, employee_id, name) VALUES (?, ?, ?, ?, ?, ?)',
+                [newUserId, employerID, payrollAmount, process.env.XRPL_CURRENCY || 'USD', `EMP-${newUserId}`, username],
                 function (err) {
                   if (err) {
                     console.error('Database error inserting employee:', err.message);

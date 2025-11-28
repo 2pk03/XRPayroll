@@ -77,6 +77,7 @@ db.serialize(() => {
       employee_id TEXT UNIQUE,
       name TEXT,
       salary REAL,
+      salary_currency TEXT DEFAULT 'USD',
       wallet_address TEXT UNIQUE,
       wallet_seed TEXT,
       FOREIGN KEY (userID) REFERENCES users(id) ON DELETE CASCADE,
@@ -161,6 +162,7 @@ db.serialize(() => {
     { name: 'employee_id', ddl: 'employee_id TEXT UNIQUE' },
     { name: 'name', ddl: 'name TEXT' },
     { name: 'salary', ddl: 'salary REAL' },
+    { name: 'salary_currency', ddl: "salary_currency TEXT DEFAULT 'USD'" },
   ]);
 
   // Insert default employer

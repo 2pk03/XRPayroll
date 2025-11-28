@@ -4,25 +4,52 @@ The app uses routes and can be adopted to any blockchain by implementing a new r
 
 ## Features
 
-- **Issuer & Recipient Wallets**: Automatically funded via the XRPL Testnet faucet.  
-- **Trust Line Creation**: The user “trusts” the issuer’s RLS token.  
-- **Send Tokens**: Demonstrates how to create and transfer stablecoin-like tokens on XRPL.  
-- **User Management**: Simple user management interface 
-- **100% API**: Backend systems with routing mechanism, API 
-- **RBAC**: Role-basd access, simple yet
-- **SQLLite**: SQL backend, tracking of wallets and funding to ensure persistency  
+- **Issuer / payout split**: Issuer address defines RLUSD; payouts spend from a separate payout wallet so supply doesn’t inflate.  
+- **Trust lines**: Employees trust the issuer’s USD (RLUSD) IOU; readiness shown in UI.  
+- **Payments & tracing**: Send RLUSD from payout wallet to employees and trace hashes.  
+- **User management / RBAC**: Admin vs employee views; My Payments for employees.  
+- **SQLite persistence**: Users, employers, employees, transactions.  
 
-## Prerequisites
+## Setup
 ```bash
-     npm install xrpl express cors multer csv-parser json2csv sqlite3 concurrently axios dotenv jsonwebtoken fs bcrypt jwt-decode express-validator vue-router@4 helmet morgan express-rate-limit express-sslify sequelize body-parser
+npm install
 ```
 
-## Quick Start
-```bash
-     npm run dev
+Create `.env` (example):
 ```
- 
- Go to ```http://localhost:8080```; password ```admin/adminpassword```
+ISSUER_WALLET_SEED=...        # RLUSD issuer (testnet or mainnet)
+PAYOUT_WALLET_SEED=...        # Payout wallet that holds RLUSD + XRP for fees
+JWT_SECRET=changeme
+XRPL_NETWORK=testnet          # devnet | testnet | mainnet
+# XRPL_ALLOW_MAINNET=true     # only if you really point at mainnet
+```
+
+For testnet, run once to prep payout (faucet, trustline, mint 1000 USD IOU):
+```bash
+node scripts/setup-testnet-payout.js
+```
+Then restart the backend so it picks up `PAYOUT_WALLET_SEED`.
+
+## Run
+```bash
+npm run dev
+```
+Open `http://localhost:8080` (default admin: `admin/adminpassword`).
+
+## Docker
+Pull the built image from GitHub Container Registry:
+```bash
+docker pull ghcr.io/2pk03/xrpayroll/xrpayroll:latest
+```
+Run with your `.env` mounted:
+```bash
+docker run --env-file .env -p 8080:8080 ghcr.io/2pk03/xrpayroll/xrpayroll:latest
+```
+
+## XRPL Notes
+- Currency code defaults to `USD` (RLUSD). Change via `XRPL_CURRENCY` if needed.  
+- Mainnet: no faucets. Admin must supply funded issuer + payout addresses and manage seeds off-app (HSM/signer recommended). Employees must trust the RLUSD issuer before payouts.  
+- Payout wallet is used for all sends; issuer supply will not grow when payout has balance.
 
 ## License
 

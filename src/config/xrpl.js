@@ -16,6 +16,11 @@ function getXRPLSettings() {
   return { network, endpoint, allowMainnet };
 }
 
+function getXRPLCurrency() {
+  // Ledger code is USD; represents RLUSD issued by the configured issuer.
+  return (process.env.XRPL_CURRENCY || 'USD').toUpperCase();
+}
+
 function parseIssuerWallets() {
   const seeds = [];
   if (process.env.ISSUER_WALLET_SEED) seeds.push(process.env.ISSUER_WALLET_SEED);
@@ -37,6 +42,17 @@ function getIssuerWalletByAddress(address) {
   return wallets.find((w) => w.address === address);
 }
 
+function getPayoutWalletSeed() {
+  return process.env.PAYOUT_WALLET_SEED || process.env.TREASURY_WALLET_SEED || '';
+}
+
+function getPayoutWallet() {
+  const seed = getPayoutWalletSeed();
+  if (!seed) return null;
+  const w = xrpl.Wallet.fromSeed(seed);
+  return { seed, address: w.classicAddress };
+}
+
 function getDefaultIssuerWallet() {
   const wallets = parseIssuerWallets();
   return wallets[0] || null;
@@ -47,5 +63,8 @@ module.exports = {
   parseIssuerWallets,
   getIssuerWalletByAddress,
   getDefaultIssuerWallet,
+  getPayoutWallet,
+  getPayoutWalletSeed,
+  getXRPLCurrency,
   NETWORKS,
 };

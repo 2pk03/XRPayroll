@@ -70,13 +70,10 @@ export default {
           password: this.password,
         });
 
-        console.log('Login response:', response);
-
         // Assuming the backend returns a JWT token
         const token = response.data.token;
         if (token) {
           localStorage.setItem('token', token);
-          console.log('JWT token stored in localStorage.');
 
           // Decode token to store user info
           try {
@@ -104,11 +101,10 @@ export default {
           }
 
           // Redirect to Home after successful login
-          this.$router.push({ name: 'Home' });
+          this.$router.replace({ name: 'Home' }).catch(() => {});
         } else {
           this.error = true;
           this.errorMessage = 'No token received from server.';
-          console.warn('No token found in the response.');
         }
       } catch (err) {
         this.error = true;

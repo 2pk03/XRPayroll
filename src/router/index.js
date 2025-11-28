@@ -1,7 +1,7 @@
 // router/index.js
 
 import { createRouter, createWebHistory } from 'vue-router';
-import { jwtDecode } from "jwt-decode";
+import jwtDecode from "jwt-decode";
 import HomePage from '../views/HomePage.vue';
 import UserManagement from '../components/UserManagement.vue';
 import LoginPage from '../components/LoginPage.vue';
@@ -9,9 +9,12 @@ import NotFound from '../views/NotFound.vue';
 import XRPayroll from '../XRPayroll.vue';
 import EmployeeProfile from '../views/EmployeeProfile.vue';
 import ManageTrustLines from '../components/ManageTrustLines.vue';
+import Payments from '../views/Payments.vue';
+import MyPayments from '../views/MyPayments.vue';
+import Settings from '../views/Settings.vue';
+import AccountSettings from '../views/AccountSettings.vue';
 
 // Log the jwtDecode to verify it's correctly imported
-console.log('jwtDecode Imported:', jwtDecode);
 
 const routes = [
   {
@@ -24,6 +27,12 @@ const routes = [
         name: 'Home',
         component: HomePage,
         meta: { requiresAuth: true }
+      },
+      {
+        path: 'account',
+        name: 'AccountSettings',
+        component: AccountSettings,
+        meta: { requiresAuth: true },
       },
       {
         path: 'profile',
@@ -42,7 +51,25 @@ const routes = [
         name: 'ManageTrustLines',
         component: ManageTrustLines,
         meta: { requiresAuth: true, adminOnly: true },
+      },
+      {
+        path: 'payments',
+        name: 'Payments',
+        component: Payments,
+        meta: { requiresAuth: true, role: 'admin' },
       },     
+      {
+        path: 'settings',
+        name: 'Settings',
+        component: Settings,
+        meta: { requiresAuth: true, role: 'admin' },
+      },
+      {
+        path: 'my-payments',
+        name: 'MyPayments',
+        component: MyPayments,
+        meta: { requiresAuth: true, role: 'employee' },
+      },
     ],
   },
   {
@@ -68,23 +95,17 @@ router.beforeEach((to, from, next) => {
   const requiredRole = to.meta.role;
   const token = localStorage.getItem('token');
 
-  console.log(`Navigating to: ${to.name}, requiresAuth: ${requiresAuth}, requiredRole: ${requiredRole}`);
-  console.log(`Token: ${token}`);
-
   if (requiresAuth) {
     if (!token) {
-      console.log('No token found. Redirecting to Login.');
       next({ name: 'Login' });
     } else {
       try {
         // Decode the token to get user info
         const decoded = jwtDecode(token);
-        console.log('Decoded token:', decoded);
 
         // Check token expiration
         const currentTime = Date.now() / 1000;
         if (decoded.exp && decoded.exp < currentTime) {
-          console.log('Token has expired. Redirecting to Login.');
           localStorage.removeItem('token');
           localStorage.removeItem('user');
           next({ name: 'Login' });
@@ -92,15 +113,12 @@ router.beforeEach((to, from, next) => {
         }
 
         if (requiredRole && decoded.role !== requiredRole) {
-          console.log(`User role '${decoded.role}' does not match required role '${requiredRole}'. Redirecting to Home.`);
           next({ name: 'Home' });
         } else {
-          console.log('User is authorized. Proceeding to route.');
           next(); // User is authorized
         }
       } catch (err) {
         console.error('Error decoding token:', err.message);
-        console.log('Invalid token. Redirecting to Login.');
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         next({ name: 'Login' });

@@ -17,10 +17,19 @@
     <!-- Header Section -->
     <header class="header">
       <h1>XRPayroll Dashboard</h1>
-      <!-- User Information and Logout Button -->
+      <span v-if="user.username" class="badge-network">Network: {{ network }}</span>
       <div class="user-info" v-if="user.username">
-        <span>Welcome, {{ user.username }} ({{ user.role }})</span>
-        <button class="logout-button" @click="handleLogout">Logout</button>
+        <div class="user-dropdown">
+          <button class="user-button" @click="toggleMenu">
+            Welcome, {{ user.username }} ({{ user.role }}) ▾
+          </button>
+          <div v-if="menuOpen" class="menu">
+            <router-link to="/account" @click="toggleMenu(false)">Account Settings</router-link>
+            <router-link v-if="isAdmin" to="/settings" @click="toggleMenu(false)">Admin Settings</router-link>
+            <router-link v-if="isEmployee" to="/my-payments" @click="toggleMenu(false)">My Payments</router-link>
+            <button class="menu-logout" @click="handleLogout">Logout</button>
+          </div>
+        </div>
       </div>
     </header>
 
@@ -30,6 +39,9 @@
       <div class="additional-links">
         <!-- Admin-Only Links -->
         <div v-if="isAdmin">
+          <router-link to="/">
+            <button :class="{ active: isActive('/') }">Main</button>
+          </router-link>
           <router-link to="/user-management">
             <button :class="{ active: isActive('/user-management') }">Manage User</button>
           </router-link>
@@ -46,141 +58,145 @@
           <router-link to="/profile">
             <button :class="{ active: isActive('/profile') }">My Profile</button>
           </router-link>
+          <router-link to="/my-payments">
+            <button :class="{ active: isActive('/my-payments') }">My Payments</button>
+          </router-link>
         </div>
       </div>
     </nav>
-  
-<!-- Buttons Section -->
-  <div class="buttons">
-    <!-- Admin-Only Buttons -->
-    <div v-if="isAdmin">
-      <!-- 1) Connect to Testnet -->
-      <button @click="connectXRPL" :disabled="connecting">
-        Connect to Testnet
-      </button>
-      <br /><br />
 
-      <!-- Fund Issuer -->
-      <button @click="fundIssuer" :disabled="!connected || fundingInProgress">
-        Fund & Set Default
-      </button>
-      <br /><br />
-
-      <!-- Disconnect Button -->
-      <button @click="disconnectXRPL" :disabled="!connected">
-        Disconnect
-      </button>
-    </div>
-  </div>
-
-   <!-- Issuer (Sender) Info -->
-    <div class="wallet-info">
-      <h3>Issuer (Sender) Wallet</h3>
-      <p><strong>Address:</strong> {{ issuerWallet || 'N/A' }}</p>
-      <p><strong>RLUSD Balance:</strong> {{ issuerRlsBalance }}</p>
-    </div>
-
-   <!-- Employee Records -->
-    <section class="employee-records">  
-      <h2>Employee Records</h2>
-      <button @click="loadEmployees" :disabled="!connected">Refresh Employees</button>      
-      <table v-if="employeeRecords.length">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Employee ID</th>
-            <th>Salary (RLUSD)</th>
-            <th>Wallet Address</th>
-            <th>Latest TX</th>
-            <th>Dispute</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="emp in employeeRecords" :key="emp.employee_id">
-            <td>{{ emp.name }}</td>
-            <td>{{ emp.employee_id }}</td>
-            <td>{{ emp.salary }}</td>
-            <td>{{ emp.wallet_address || 'No Wallet' }}</td>
-            <td>{{ emp.latest_transaction || 'No TX (yet)' }}</td>
-            <td>
-              <button @click="traceTransactions" :disabled="traceInProgress || !connected">Trace</button>
-            </td>
-            <td>
-              <button 
-                @click="executeSalary(emp)" 
-                :disabled="salaryExecutionInProgress || !connected">
-                Execute Salary
-              </button>              
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <p v-else>No employee records available.</p>
-    </section>
-
-    <!-- Trace Results -->
-    <section class="trace-results" v-if="traceResults.length">
-  <h2>Trace Results</h2>
-  <table>
-    <thead>
-      <tr>
-        <th>Employee</th>
-        <th>TX ID</th>
-        <th>Amount</th>
-        <th>Wallet</th>
-        <th>Received</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr v-for="result in traceResults" :key="result.tx_id">
-        <td>{{ result.employee_name }}</td>
-        <td>{{ result.tx_id }}</td>
-        <td>{{ result.amount }}</td>
-        <td>{{ result.wallet_address }}</td>
-        <td>{{ result.ledger_close_time }}</td>
-      </tr>
-    </tbody>
-  </table>
-</section>
-
-<!-- CSV Import/Export -->
-    <section class="csv-section">
-      <h2>Employee CSV Import/Export</h2>
-
-      <!-- Import CSV -->
-      <div class="import-csv">
-        <h3>Import Employees via CSV</h3>
-        <form @submit.prevent="importCsv">
-          <input type="file" accept=".csv" ref="fileInput" />
-          <button type="submit">Import CSV</button>
-        </form>
+    <div v-if="isHome && isAdmin">
+      <!-- Buttons Section -->
+      <div class="buttons">
+        <!-- Admin-Only Buttons -->
+        <div v-if="isAdmin" class="buttons-row">
+          <button @click="connectXRPL" :disabled="connecting || connected">
+            {{ connected ? 'Connected' : 'Connect to XRPL' }}
+          </button>
+                  </div>
+        <div v-if="isAdmin">
+          <button @click="disconnectXRPL" :disabled="!connected">
+            Disconnect
+          </button>
+        </div>
       </div>
 
-      <!-- Export CSV -->
-      <div class="export-csv">
-        <h3>Export Employees to CSV</h3>
-        <button @click="exportCsv">Download Employees CSV</button>
+      <!-- Issuer (Sender) Info -->
+      <div class="wallet-info">
+        <h3>Issuer (Sender) Wallet</h3>
+        <p><strong>XRP Address:</strong> {{ issuerWallet || 'N/A' }}</p>
+        <p><strong>RLUSD Issuer Address:</strong> {{ issuerWallet || 'N/A' }}</p>
+        <p class="hint">XRP is for fees/reserve; RLUSD payouts spend from the payout wallet below.</p>
       </div>
-    </section>
 
-    <!-- Log Level Selector -->
-    <div class="log-level">
-      <label for="logLevelSelect">Log Level:</label>
-      <select id="logLevelSelect" v-model="selectedLogLevel">
-        <option v-for="level in logLevels" :key="level.value" :value="level.value">
-          {{ level.label }}
-        </option>
-      </select>
-    </div>
+      <div class="wallet-info">
+        <h3>Payout Wallet</h3>
+        <p><strong>Address:</strong> {{ payoutAddress || 'Not set' }}</p>
+        <p><strong>RLUSD Balance (spendable):</strong> {{ payoutRlsBalance || 'N/A' }}</p>
+        <p><strong>XRP Balance:</strong> {{ payoutXrpBalance || 'N/A' }}</p>
+        <p class="hint">Payroll transactions use this wallet.</p>
+      </div>
 
-    <!-- Logs Display -->
-    <div class="logs">
-      <h3>Logs</h3>
-      <div v-for="(log, index) in filteredLogs" :key="index" class="log-line">
-        <span :class="log.level">
-          {{ log.timestamp }} [{{ log.level }}]: {{ log.message }}
-        </span>
+      <!-- Employee Records -->
+      <section class="employee-records">  
+        <h2>Employee Records</h2>
+        <button @click="loadEmployees" :disabled="!connected">Refresh Employees</button>      
+        <table v-if="employeeRecords.length">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Employee ID</th>
+              <th>Salary (RLUSD)</th>
+              <th>Wallet Address</th>
+              <th>Latest TX</th>
+              <th>Dispute</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="emp in employeeRecords" :key="emp.employee_id">
+              <td>{{ emp.name }}</td>
+              <td>{{ emp.employee_id }}</td>
+              <td>{{ emp.salary }}</td>
+              <td>{{ emp.wallet_address || 'No Wallet' }}</td>
+              <td>{{ emp.latest_transaction || 'No TX (yet)' }}</td>
+              <td>
+                <button @click="traceTransactions" :disabled="traceInProgress || !connected">Trace</button>
+              </td>
+              <td>
+                <button 
+                  @click="executeSalary(emp)" 
+                  :disabled="salaryExecutionInProgress || !connected">
+                  Execute Salary
+                </button>              
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p v-else>No employee records available.</p>
+      </section>
+
+      <!-- Trace Results -->
+      <section class="trace-results" v-if="traceResults.length">
+        <h2>Trace Results</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Employee</th>
+              <th>TX ID</th>
+              <th>Amount</th>
+              <th>Wallet</th>
+              <th>Received</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="result in traceResults" :key="result.tx_id">
+              <td>{{ result.employee_name }}</td>
+              <td>{{ result.tx_id }}</td>
+              <td>{{ result.amount }}</td>
+              <td>{{ result.wallet_address }}</td>
+              <td>{{ result.ledger_close_time }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- CSV Import/Export -->
+      <section class="csv-section">
+        <h2>Employee CSV Import/Export</h2>
+
+        <div class="import-csv">
+          <h3>Import Employees via CSV</h3>
+          <form @submit.prevent="importCsv">
+            <input type="file" accept=".csv" ref="fileInput" />
+            <button type="submit">Import CSV</button>
+          </form>
+        </div>
+
+        <div class="export-csv">
+          <h3>Export Employees to CSV</h3>
+          <button @click="exportCsv">Download Employees CSV</button>
+        </div>
+      </section>
+
+      <!-- Log Level Selector -->
+      <div class="log-level">
+        <label for="logLevelSelect">Log Level:</label>
+        <select id="logLevelSelect" v-model="selectedLogLevel">
+          <option v-for="level in logLevels" :key="level.value" :value="level.value">
+            {{ level.label }}
+          </option>
+        </select>
+      </div>
+
+      <!-- Logs Display -->
+      <div class="logs">
+        <h3>Logs</h3>
+        <div v-for="(log, index) in filteredLogs" :key="index" class="log-line">
+          <span :class="log.level">
+            {{ log.timestamp }} [{{ log.level }}]: {{ log.message }}
+          </span>
+        </div>
       </div>
     </div>
 
@@ -192,7 +208,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import axios from 'axios';
-import { jwtDecode } from 'jwt-decode';
+import jwtDecode from 'jwt-decode';
 import { useRouter, useRoute } from 'vue-router';
 
 // ----------------------------------------------------------------------------
@@ -268,6 +284,17 @@ const isActive = (path) => {
   return route.path === path;
 };
 
+const isHome = computed(() => route.name === 'Home' || route.path === '/');
+
+const menuOpen = ref(false);
+const toggleMenu = (force) => {
+  if (typeof force === 'boolean') {
+    menuOpen.value = force;
+  } else {
+    menuOpen.value = !menuOpen.value;
+  }
+};
+
 // Logout Handler
 function handleLogout() {
   // Clear token and user info from localStorage
@@ -282,13 +309,19 @@ function handleLogout() {
 // connect defaults
 const status = ref('Disconnected from XRPL');
 const connected = ref(false);
+const connecting = ref(false);
+const network = ref('unknown');
 
 // Issuer & Selected Employee Wallets
 const issuerWallet = ref('');
 const selectedEmployeeWallet = ref('');
 
 // Store the issuer's RLS balance
-const issuerRlsBalance = ref('');
+const issuerXrpBalance = ref('');
+const issuerIssuedSupply = ref('');
+const payoutAddress = ref('');
+const payoutRlsBalance = ref('');
+const payoutXrpBalance = ref('');
 
 // Store the user's latest transaction
 const userLatestTx = ref(null);
@@ -297,10 +330,19 @@ const userLatestTx = ref(null);
 const traceResults = ref([]);
 const traceInProgress = ref(false);
 
-// connect to XRPL Testnet
+async function loadConfig() {
+  try {
+    const resp = await axios.get('/api/config');
+    network.value = resp.data.network || 'unknown';
+  } catch (e) {
+    addLog('WARN', `Failed to load config: ${e.message}`);
+  }
+}
+
+// connect to XRPL
 async function connectXRPL() {
-    status.value = 'Connecting to XRPL Testnet...';
-    addLog('INFO', 'Initiating connection to XRPL Testnet...');
+    status.value = 'Connecting to XRPL...';
+    addLog('INFO', 'Initiating connection to XRPL...');
   
     try {
         const token = localStorage.getItem('token');
@@ -316,8 +358,8 @@ async function connectXRPL() {
         if (connectResp.data && connectResp.data.address) {
             issuerWallet.value = connectResp.data.address;
             connected.value = true;
-            status.value = 'Connected to XRPL Testnet!';
-            addLog('INFO', `Connected to XRPL Testnet with issuer ${issuerWallet.value}`);
+            status.value = 'Connected to XRPL';
+            addLog('INFO', `Connected to XRPL with issuer ${issuerWallet.value}`);
             
             // Fetch updated RLUSD balance after connecting
             await getIssuerRlsBalance();
@@ -331,54 +373,6 @@ async function connectXRPL() {
         console.error(error);
         alert(`Connection Error: ${errorMessage}`);
     }
-}
-
-// fund issuer wallet, enable default ripple, track funding progress
-const fundingInProgress = ref(false);
-
-// Fund Issuer Wallet
-async function fundIssuer() {
-    fundingInProgress.value = true;
-    status.value = 'Funding issuer wallet...';
-    addLog('INFO', 'Requesting backend to fund issuer wallet and set default.');
-
-    try {
-        const token = localStorage.getItem('token');
-        const response = await axios.post('/api/testnet/fund-issuer', {}, {
-            headers: { Authorization: `Bearer ${token}` },
-        });
-
-        status.value = 'Issuer wallet funded successfully.';
-        addLog('INFO', response.data.message);
-        connected.value = true;
-
-        // Fetch updated balance
-        await getIssuerRlsBalance();
-    } catch (error) {
-        status.value = 'Funding issuer wallet failed.';
-        addLog('ERROR', `Error funding issuer wallet: ${error.response?.data?.message || error.message}`);
-        console.error(error);
-    } finally {
-        fundingInProgress.value = false;
-    }
-
-  // Enable Default Ripple
-  try {
-    const token = localStorage.getItem('token');
-    const response = await axios.post('/api/testnet/enable-ripple', {}, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    status.value = 'Default enabled.';
-    addLog('INFO', response.data.message);
-    connected.value = true; // Set connected to true after funding
-  } catch (error) {
-    status.value = 'Something went wrong.';
-    addLog('ERROR', `Error enabling default: ${error.response?.data?.message || error.message}`);
-    console.error(error);
-  } finally {
-    fundingInProgress.value = false;
-  }
 }
 
 // Track salary execution progress
@@ -411,29 +405,7 @@ async function executeSalary(employee) {
             }
         }
 
-        // Step 2: Establish Trust Line (if not already established)
-        const walletSeedResponse = await axios.post(
-            '/api/testnet/employees/get-wallet-seed',
-            { employeeID: employee.employee_id },
-            { headers: { Authorization: `Bearer ${token}` } }
-        );
-        const employeeWalletSeed = walletSeedResponse.data.walletSeed;
-        if (!employeeWalletSeed) {
-            throw new Error('Employee wallet seed is not available.');
-        }
-
-        await axios.post(
-            '/api/testnet/trustlines/create',
-            {
-                employeeWalletSeed,
-                issuerAddress: issuerWallet.value,
-                limit: '1000000', // Generic trust line limit
-            },
-            { headers: { Authorization: `Bearer ${token}` } }
-        );
-        addLog('INFO', `Trust line established for ${employee.wallet_address}`);
-
-        // Step 3: Send Salary
+        // Step 2: Send Salary (assumes trustline already in place)
         const salaryAmount = parseFloat(employee.salary) || 0;
         if (salaryAmount <= 0) {
             throw new Error('Invalid salary amount.');
@@ -446,7 +418,7 @@ async function executeSalary(employee) {
         );
         addLog('INFO', `Salary of ${salaryAmount} RLUSD sent to ${employee.wallet_address}`);
 
-        // Step 4: Refresh Issuer Balance
+        // Step 3: Refresh Issuer Balance
         await getIssuerRlsBalance();
 
         alert(`Salary executed successfully for ${employee.name}`);
@@ -547,16 +519,20 @@ async function getIssuerRlsBalance() {
             headers: { Authorization: `Bearer ${token}` },
         });
 
-        // Balance is returned in drops; divide by 1,000,000 to convert to XRP
-        const balanceInXRP = parseFloat(resp.data.balance) / 1_000_000;
-
-        issuerRlsBalance.value = `${balanceInXRP.toFixed(6)} XRP`;
-        status.value = `Issuer RLS balance: ${issuerRlsBalance.value}`;
-        addLog('INFO', `Issuer RLS Balance: ${issuerRlsBalance.value}`);
+        const xrpBalance = resp.data.xrpBalance || `${(parseFloat(resp.data.xrpBalanceDrops || 0) / 1_000_000).toFixed(6)} XRP`;
+        issuerXrpBalance.value = xrpBalance;
+        issuerIssuedSupply.value = `${resp.data.issuedSupply || 0} ${resp.data.issuedCurrency || 'USD'}`;
+        payoutAddress.value = resp.data.payoutAddress || '';
+        payoutRlsBalance.value = resp.data.payoutBalance !== null && resp.data.payoutBalance !== undefined
+          ? `${resp.data.payoutBalance} ${resp.data.issuedCurrency || 'USD'}`
+          : '';
+        payoutXrpBalance.value = resp.data.payoutXrp ? `${resp.data.payoutXrp} XRP` : '';
+        status.value = `Issuer XRP balance: ${issuerXrpBalance.value}`;
+        addLog('INFO', `Issuer XRP Balance: ${issuerXrpBalance.value}, Issued: ${issuerIssuedSupply.value}`);
     } catch (error) {
-        status.value = 'Failed to fetch issuer RLS balance!';
+        status.value = 'Failed to fetch issuer balance!';
         const errorMessage = error.response?.data?.message || error.message || 'Unknown error';
-        addLog('ERROR', `Failed to get issuer RLS balance: ${errorMessage}`);
+        addLog('ERROR', `Failed to get issuer balance: ${errorMessage}`);
         console.error(error);
         alert(`Balance Fetch Error: ${errorMessage}`);
     }
@@ -646,7 +622,7 @@ async function traceTransactions() {
 
   const employeesToTrace = employeeRecords.value.filter((emp) => emp.tx_id);
   if (employeesToTrace.length === 0) {
-    addLog('WARN', 'No employees selected for tracing.');
+    addLog('WARN', 'No transactions available to trace yet.');
     traceInProgress.value = false;
     return;
   }
@@ -740,7 +716,9 @@ function disconnectXRPL() {
     addLog('INFO', 'Disconnected from XRPL Testnet.');
     connected.value = false;
     issuerWallet.value = '';
-    issuerRlsBalance.value = '0';
+    issuerXrpBalance.value = '0';
+    issuerIssuedSupply.value = '0 USD';
+    payoutAddress.value = '';
     selectedEmployeeWallet.value = '';
     userLatestTx.value = null;
     status.value = 'Disconnected from XRPL';
@@ -832,6 +810,7 @@ async function exportCsv() {
 // lifecycle hooks
 onMounted(() => {
   decodeToken();
+  loadConfig();
   loadEmployees();
   loadTransactions();
 });
@@ -855,6 +834,60 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+.badge-network {
+  display: inline-block;
+  background: #4a5568;
+  color: #fff;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+.user-dropdown {
+  position: relative;
+}
+.user-button {
+  padding: 8px 10px;
+  background: #f0f0f0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  cursor: pointer;
+  min-width: 200px;
+  text-align: left;
+}
+.menu {
+  position: absolute;
+  right: 0;
+  top: 40px;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+  z-index: 10;
+}
+.menu a,
+.menu button {
+  padding: 8px 12px;
+  text-align: left;
+  border: none;
+  background: none;
+  width: 100%;
+  cursor: pointer;
+  font-size: 14px;
+  display: block;
+  text-decoration: none;
+  color: #333;
+}
+.menu a:hover,
+.menu button:hover {
+  background: #f5f5f5;
+}
+.menu-logout {
+  color: #c00;
 }
 
 .logout-button {
@@ -928,6 +961,21 @@ onMounted(() => {
 
 .buttons button {
   margin: 0 10px 10px 0;
+  min-width: 180px;
+}
+
+.buttons-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.badge {
+  background: #eef2f7;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
 }
 
 .wallet-info {

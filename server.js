@@ -30,7 +30,8 @@ const employerRoutes = require('./src/routes/employerRoutes');
 const employeeRoutes = require('./src/routes/employeeRoutes');
 const testnetRoutes = require('./src/routes/testnetRoutes'); // New Testnet routes
 const { getIssuerWalletAndJwtSecret } = require('./issuerWallet');
-const { getXRPLSettings, parseIssuerWallets, getDefaultIssuerWallet } = require('./src/config/xrpl');
+const { getXRPLSettings, parseIssuerWallets, getDefaultIssuerWallet, getXRPLCurrency, getPayoutWallet } = require('./src/config/xrpl');
+const xrpl = require('xrpl');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -66,6 +67,7 @@ let jwtSecret;
 app.locals.xrplClient = null;
 app.locals.xrplNetwork = null;
 app.locals.issuerWallets = [];
+app.locals.xrplCurrency = getXRPLCurrency();
 
 // Routes
 app.use('/api/auth', authRoutes); 
@@ -75,6 +77,7 @@ app.use('/api/transactions', transactionRoutes);
 app.use('/api/employers', employerRoutes);
 app.use('/api/employees', employeeRoutes);
 app.use('/api/testnet', testnetRoutes); // Mount the new Testnet routes
+app.set('etag', false); // disable etag to avoid 304 caching on API responses
 
 // Root Endpoint
 app.get('/', (req, res) => {
@@ -86,6 +89,8 @@ app.get('/api/config', (req, res) => {
   res.json({
     network: app.locals.xrplNetwork || 'testnet',
     issuerAddresses: (app.locals.issuerWallets || []).map((w) => w.address),
+    currency: app.locals.xrplCurrency,
+    payoutAddress: app.locals.payoutAddress || null,
   });
 });
 
@@ -112,6 +117,8 @@ async function startServer() {
     if (!app.locals.issuerWallets.length && issuerWallet) {
       app.locals.issuerWallets = [{ seed: issuerWallet.seed, address: issuerWallet.classicAddress }];
     }
+    const payout = getPayoutWallet();
+    app.locals.payoutAddress = payout ? payout.address : null;
 
     // Start Server
     app.listen(PORT, () => {

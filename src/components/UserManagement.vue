@@ -196,6 +196,7 @@ export default {
           ...user,
           employerName: user.employerName || '-',
           payrollAmount: user.payrollAmount || 0,
+          employerID: user.employerID || '',
         }));
       } catch (err) {
         console.error('Error fetching users:', err);
@@ -262,7 +263,11 @@ export default {
       }
     },
     editUser(user) {
-      this.editingUser = { ...user };
+      this.editingUser = {
+        ...user,
+        employerID: user.employerID || '',
+        payrollAmount: user.payrollAmount ?? null,
+      };
     },
   },
 };
