@@ -19,5 +19,15 @@ pids
 # Dependency directories
 node_modules/
 
-# Databse files
+# Database files
 *.db
+*.sqlite
+*.sqlite3
+XRPayroll.db
+
+# OS/editor junk
+.DS_Store
+Thumbs.db
+.vscode/
+dist/
+coverage/
