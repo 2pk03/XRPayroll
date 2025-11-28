@@ -25,13 +25,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
-      - name: Build container (no push)
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push container
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
-          push: false
-          tags: xrpayroll:${{ github.ref_name }}
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/xrpayroll:${{ github.ref_name }}
+            ghcr.io/${{ github.repository }}/xrpayroll:latest
 
   release:
     runs-on: ubuntu-latest
