@@ -28,7 +28,8 @@ jobs:
       - name: Compute image repo (lowercase)
         id: repo
         run: |
-          REPO="ghcr.io/${GITHUB_REPOSITORY,,}/xrpayroll"
+          OWNER=$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
+          REPO="ghcr.io/${OWNER}/xrpayroll"
           echo "repo=${REPO}" >> $GITHUB_OUTPUT
       - name: Log in to GHCR
         uses: docker/login-action@v3
